@@ -14,8 +14,8 @@ history = File.join(ENV['HOME'],".br","history")
 bookmark = File.join(ENV['HOME'],".br","bookmark")
 
 def full_uri(args)
-  searchengine="http://www.google.com/search?q="
-  #searchengine="http://goosh.org/#"
+  #searchengine="http://www.google.com/search?q="
+  searchengine="http://goosh.org/#"
   #searchengine="https://encrypted.google.com/search?q="
   #searchengine="http://www.google.com/webhp?hl=all&q="
   #searchengine = "http://ixquick.com/do/metasearch.pl?query="
@@ -38,11 +38,9 @@ def full_uri(args)
         Net::HTTP.get_response(URI.parse("http://"+uri))#.code =~ /^2|^3/
         uri = "http://"+uri
       rescue
-        #uri = searchengine+uri.gsub(/\s+/,"+")
         uri = searchengine+uri
       end
     else
-      #uri = searchengine+uri.gsub(/\s+/,"+")
       uri = searchengine+uri
     end
   end
@@ -53,7 +51,6 @@ clipboard = Gtk::Clipboard.get(Gdk::Selection::CLIPBOARD)
 sw = Gtk::ScrolledWindow.new(nil, nil)
 wv = Gtk::WebKit::WebView.new
 wv.settings.enable_page_cache=true
-wv.settings.enable_java_applet=true
 sw.add wv
 win = Gtk::Window.new
 win.add(sw)
@@ -143,6 +140,7 @@ wv.signal_connect("document-load-finished") do |w|
   insert = false
   last = `tail -n 1 #{history}`.chomp
   if wv.get_uri =~ /^https:\/\// 
+    # TODO: check certificate
     win.border_width = 2
     win.modify_bg(Gtk::STATE_NORMAL,Gdk::Color.parse("green"))
   else 
@@ -154,12 +152,15 @@ wv.signal_connect("document-load-finished") do |w|
 end
 
 wv.signal_connect("mime-type-policy-decision-requested") do |w,f,r,mime,decision|
-  if mime =~ /html/
+  # TODO: not working in ruby
+  # wv.can_show_mime_type mime 
+  if mime =~ /html|xml/
     false
   else
-    `cd $HOME/Downloads && wget #{r.uri}`
+    # TODO: set cookies for download
+    `cd $HOME/Downloads && xterm -e wget -v #{r.uri}`
     Process.spawn("zathura #{File.join(ENV["HOME"],"Downloads",File.basename(r.uri))}") if mime =~ /pdf/
-    wv.open wv.get_uri # do not open a new window
+    wv.open wv.get_uri
     true
   end
 end
