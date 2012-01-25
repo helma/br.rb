@@ -28,3 +28,18 @@ if (document.getElementsByTagName("body")[0] !== null && typeof(document.getElem
 self.onunload = function() {
     vimprobable_v(document.activeElement, '');
 };
+/*
+if(document.activeElement)
+    console.log("insertmode_on");
+
+if (document.getElementsByTagName("body")[0] !== null && typeof(document.getElementsByTagName("body")[0]) == "object") {
+  document.getElementsByTagName('body')[0].addEventListener("blur", function(x) { console.log('insertmode_off') ; }, true);
+  document.getElementsByTagName('body')[0].addEventListener("focus", function(x) { console.log('insertmode_on') ; }, true);
+}
+
+$(':input').focus(function(x) { console.log('insertmode_on') ; });
+//$('[type=text]').focus(function(x) { console.log('insertmode_on') ; });
+$(':input').blur(function(x) { console.log('insertmode_off') ; });
+//$('[type=text]').blur(function(x) { console.log('insertmode_off') ; });
+*/
+
