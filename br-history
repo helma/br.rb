@@ -1,0 +1,5 @@
+#!/bin/sh
+
+sort $HOME/.br/history|grep -v google|uniq -c |sort -nr| grep -v "^ \+1 "|sed 's/^ *[0-9]* //'
+
+#|sed -e 's/^ *[0-9]* //; 15,$d; s/http:\/\///; s/www\.//'
