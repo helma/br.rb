@@ -14,8 +14,10 @@ login_file = File.join(ENV['HOME'],".br","login.yaml")
 @login = YAML.load_file login_file
 
 def full_uri(args)
+  searchengine="https://duckduckgo.com/?q="
   #searchengine="http://www.google.com/search?q="
-  searchengine="http://goosh.org/#"
+  #searchengine="http://goosh.org/#"
+  args = [args].flatten
   args.size == 1 ?  uri = args.first : uri = searchengine+args.join("+")
   uri ||= serchengine
   unless uri =~ /^http|^file/
@@ -49,7 +51,7 @@ def login
   host = URI(@wv.get_uri).host
   @wv.execute_script "$('input:text').val('#{@login[host][:user]}');"
   @wv.execute_script "$('input:password').val('#{@login[host][:password]}');"
-  @wv.execute_script "$('input:submit').click();"
+  #@wv.execute_script "$('input:submit').click();"
 end
 
 clipboard = Gtk::Clipboard.get(Gdk::Selection::CLIPBOARD)
@@ -112,8 +114,8 @@ clipboard = Gtk::Clipboard.get(Gdk::Selection::CLIPBOARD)
       Process.spawn("chromium #{@wv.get_uri}")
       Gtk.main_quit
     when "L"
-      File.open(login_file, "a+"){|f| f.puts "\n#{URI(@wv.get_uri).host}:\n\t:user: \n\t:password: "}
-      `xterm -e vim + +k #{login_file}`
+      #File.open(login_file, "a+"){|f| f.puts "\n#{URI(@wv.get_uri).host}:\n  :user: \n  :password: "}
+      #`xterm -e vim + +k #{login_file}`
       @login = YAML.load_file login_file
       login
     when "q"
@@ -147,7 +149,7 @@ end
   @wv.get_uri.match(%r{docs.google.com|goosh.org}) ?  insertmode_on : insertmode_off
   last = `tail -n 1 #{history}`.chomp
   File.open(history, "a+"){|f| f.puts @wv.get_uri} if @wv.get_uri and !@wv.get_uri.empty? and @wv.get_uri != last
-  login if @login.keys.include? URI(@wv.get_uri).host
+  #login if @login.keys.include? URI(@wv.get_uri).host
 end
 
 if ARGV.empty?
