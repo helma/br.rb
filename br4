@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+require 'ffi'
+
+module Gtk
+  extend FFI::Library
+  ffi_lib "/usr/lib/libwebkitgtk-1.0.so"
+  attach_function :webkit_web_view_new, [], :pointer
+end
+
+wv = Gtk.webkit_web_view_new
+puts wv.class
+
+#@sw = Gtk::ScrolledWindow.new(nil, nil)
+#@wv = Gtk::WebKit::WebView.new
+#@wv.settings.enable_page_cache=true
+#@sw.add @wv
+#@win = Gtk::Window.new
+#@win.add(@sw)
+
+
+#@win.signal_connect("destroy") { Gtk.main_quit }
+
+#@win.show_all
+#Gtk.main

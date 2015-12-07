@@ -1,0 +1,216 @@
+#!/usr/bin/env ruby
+require 'ffi-gtk2'
+require 'net/http'
+require 'yaml'
+
+Encoding.default_external = Encoding::UTF_8
+Encoding.default_internal = Encoding::UTF_8
+
+insert = false
+search = ""
+history = File.join(ENV['HOME'],".br","history")
+`cp #{history} #{history}~`
+`tail -n 10000 #{history}~ > #{history}`
+bookmark = File.join(ENV['HOME'],".br","bookmark")
+edit = File.join(ENV['HOME'],".br","edit.tmp")
+@pw = File.join(ENV['HOME'],".br","pw")+".cpt"
+
+def full_uri(args)
+  searchengine="http://www.google.com/search?q="
+  #searchengine="http://goosh.org/#"
+  #searchengine="https://encrypted.google.com/search?q="
+  #searchengine = "http://ixquick.com/do/metasearch.pl?query="
+  #searchengine = "https://ssl.scroogle.org/cgi-bin/nbbwssl.cgi?Gw="
+  if args.is_a? Array
+    if args.size == 1
+      uri = args.first
+    else
+      uri = searchengine+args.join("+")
+    end
+  else
+    uri = args
+  end
+  unless uri =~ /^http|^file/ or uri.empty?
+    if File.exists?(uri)
+      uri = "file:///"+`pwd`+'/'+uri
+    # Get the HTTP_RESPONSE from the site we are checking
+    elsif uri =~ /\./ 
+      begin
+        Net::HTTP.get_response(URI.parse("http://"+uri))#.code =~ /^2|^3/
+        uri = "http://"+uri
+      rescue
+        uri = searchengine+uri
+      end
+    else
+      uri = searchengine+uri
+    end
+  end
+  uri
+end
+
+def login_filler
+  #@password ||= `xterm -e "echo 'Master password:'; read -s pw"`; echo -n $pw`
+  @password ||= `echo "" | dmenu -b -p "master password: "`.chomp
+  @pwds ||=  YAML.load `export pw=#{@password} && ccat -E pw #{@pw}`.chomp
+  search_uri = wv.get_uri.split("?").first
+  unless @pwds[search_uri]
+    users = @pwds.collect{|k,v| v[:user]}.uniq.join("\n")
+    pwds = @pwds.collect{|k,v| v[:password]}.uniq.join("\n")
+    user = `echo "#{users}" | dmenu -b -l 10 -p "user: "`.chomp
+    password = `echo "#{pwds}" | dmenu -b -l 10 -p "password: "`.chomp
+    @pwds[search_uri] = {:user => user, :password => password}
+    ENV['pw'] = @password
+    `echo "#{@pwds.to_yaml}" | ccencrypt -E pw > #{@pw}`
+  end
+  wv.execute_script File.read(File.join(File.dirname(__FILE__),"jquery-1.7.1.min.js"))
+  wv.execute_script "$('[type=text]').val('#{@pwds[search_uri][:user]}');"
+  wv.execute_script "$('[type=password]').val('#{@pwds[search_uri][:password]}');"
+  wv.execute_script "$('[type=submit]').closest('form').trigger('submit', [true]);"
+end
+
+GirFFI.setup :WebKit#, '3.0'
+Gtk.init
+clipboard = Gtk::Clipboard.get(nil)
+win = Gtk::Window.new :toplevel
+sw = Gtk::ScrolledWindow.new nil, nil
+wv = WebKit::WebView.new
+wv.settings.enable_page_cache=true
+win.add sw
+sw.add wv
+
+GObject.signal_connect(win, "destroy") { Gtk.main_quit }
+
+GObject.signal_connect(win, "key-press-event") do |w,e|
+  if e.string == "Escape"
+    insert = false
+    wv.stop_loading
+  end
+  unless insert
+    case e.string
+    when "b"
+      wv.open File.read(bookmark).chomp
+    when "m"
+      `echo "#{wv.get_uri}" > #{bookmark} `
+    when "P"
+      wv.execute_script("window.print();")
+    when "g"
+      sw.vadjustment.value = 0
+    when "G"
+      sw.vadjustment.value = sw.vadjustment.upper - sw.vadjustment.page_size
+    when "j"
+      sw.vadjustment.value = [sw.vadjustment.upper - sw.vadjustment.page_size,sw.vadjustment.value + sw.vadjustment.step_increment].min
+    when "k"
+      sw.vadjustment.value = [0,sw.vadjustment.value - sw.vadjustment.step_increment].max
+    when "s"
+      Process.spawn("wget -O /tmp/br-source.html #{wv.get_uri} && xterm -e \"vim -c 'set filetype=html' /tmp/br-source.html\" &")
+    when "f"
+      wv.execute_script(File.read(File.join(File.dirname(__FILE__),"link-hinting.js"))+"\nhintMode();")
+    when "F"
+      wv.execute_script(File.read(File.join(File.dirname(__FILE__),"link-hinting.js"))+"\nhintMode(true);")
+    when "i"
+      insert = true
+    when "r"
+      wv.reload
+    when "y"
+      clipboard.set_text wv.get_uri, -1
+      clipboard.store
+    when "p"
+      wv.open full_uri(clipboard.wait_for_text)
+    when "o"
+      wv.open full_uri(`br-history|dmenu -b -l 10`)
+    when "h"
+      wv.go_back
+    when "l"
+      wv.go_forward
+    when "slash"
+      search = `echo "#{search}"| dmenu -b`.chomp
+      wv.search_text search,false,true,true
+    when "n"
+      wv.search_text search,false,true,true
+    when "e"
+      wv.execute_script "console.log('value='+document.activeElement.value)"
+      `xterm -e vim #{edit}`
+      wv.execute_script "document.activeElement.value = '#{File.read(edit).chomp}';"
+      File.delete edit
+    when "L"
+      login_filler
+    when "q"
+      Gtk.main_quit
+    else
+    end
+  end
+end
+
+
+# receive javascript messages (borrowed from vimpropable)
+GObject.signal_connect(wv, "console-message") do |w,message|
+  case message
+  when "insertmode_on"
+    insert = true
+  when "insertmode_off"
+    insert = false
+  when /^value=/
+    File.open(edit,"w+"){|f| f.puts message.sub(/^value=/,'')}
+  end
+end
+
+GObject.signal_connect(wv, "download-requested") do |w,download|
+  file = download.suggested_filename
+  file = "br_download" if file.empty?
+  download.set_destination_uri(File.join("file://",ENV['HOME'],"Download",file))
+end
+
+#GObject.signal_connect(wv, "create-web-view") do |w,f,d| 
+  #wv.open wv.get_uri # do not open a new window
+#end
+
+GObject.signal_connect(wv, "document-load-finished") do |w|
+  # insertmode for google docs
+  wv.get_uri.match(%r{https://docs.google.com/document}) ? insert = true : insert = false
+  last = `tail -n 1 #{history}`.chomp
+=begin
+  if wv.get_uri =~ /^https:\/\// 
+    # TODO: check certificate
+    win.set_border_width 2
+    #win.modify_bg(Gtk::STATE_NORMAL,Gdk::Color.parse("green"))
+  else 
+    win.set_border_width 5
+    #puts win.public_methods.sort
+    c = Gdk::Color.parse("red")
+    #puts win.public_method(:modify_bg).parameters
+    #win.modify_bg c, nil #(Gtk::STATE_NORMAL,Gdk::Color.parse("red"))
+    puts win.get_state.class
+    win.modify_bg(win.get_state,*Gdk::Color.parse("red"))
+    #win.modify_bg(:normal, Gdk::Color.parse("red"))
+  end
+=end
+  wv.execute_script(File.read(File.join(File.dirname(__FILE__),"adblock.js")))
+  # hack to make google docs work
+  wv.execute_script(File.read(File.join(File.dirname(__FILE__),"input-focus.js"))) unless wv.get_uri.match(%r{https://docs.google.com/document})
+  File.open(history, "a+"){|f| f.puts wv.get_uri} if wv.get_uri and !wv.get_uri.empty? and wv.get_uri != last
+  #login_filler if @pwds and @pwds.keys.include? wv.get_uri.split("?").first
+end
+
+GObject.signal_connect(wv, "mime-type-policy-decision-requested") do |w,f,r,mime,decision|
+  # TODO: not working in ruby
+  #return false if wv.can_show_mime_type mime 
+  if mime =~ /html|xml/
+    false
+  elsif mime =~ /pdf/
+    # TODO: set cookies for download
+    `cd $HOME/Downloads && xterm -e wget -v #{r.uri}`
+    Process.spawn("mupdf #{File.join(ENV["HOME"],"Downloads",File.basename(r.uri))}") if mime =~ /pdf/
+    wv.open wv.get_uri
+    true
+  end
+end
+
+if ARGV.empty?
+  wv.load_html_string(ARGF.read)
+else
+  wv.open full_uri(ARGV)
+  #wv.open ARGV.first
+end
+win.show_all
+GLib.idle_add GLib::PRIORITY_DEFAULT_IDLE, Proc.new{Thread.pass; true}, nil, nil
+Gtk.main
